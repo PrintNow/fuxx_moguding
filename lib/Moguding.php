@@ -2,18 +2,20 @@
 
 class Moguding
 {
-    private $phone = '';
-    private $password = '';
+    private $phone = '';//手机号
+    private $password = '';//密码
 
-    private $token = '';
-    private $planId = '';
+    private $token = '';//登录后可以获取到的
+    private $planId = '';//签到计划ID
+
+    private $signType = 'START';//签到类型，默认上班签到
 
     /**
      * @var array
      */
     private $location = [];
 
-    public function setData($phone, $password, array $location)
+    public function setData($phone, $password, array $location): Moguding
     {
         $this->phone = $phone;
         $this->password = $password;
@@ -22,8 +24,24 @@ class Moguding
         return $this;
     }
 
+    /**
+     * 设置签到类型，不设置默认就是上班签到
+     * @param string $signType START：上班  END：下班签到
+     * @return $this
+     */
+    public function setSignType(string $signType): Moguding
+    {
+        $this->signType = $signType;
+        return $this;
+    }
+
+    /**
+     * 运行脚本
+     * @throws Exception
+     */
     public function run()
     {
+        $this->writeLog("开始运行");
         $this->token = $this->getToken();
         $this->planId = $this->getPlanId();
         $this->doSign();
@@ -46,12 +64,22 @@ class Moguding
             'loginType' => 'android'
         ]);
 
-        if (empty($res)) throw new Exception('登陆失败，请稍后再试');
+        if (empty($res)) {
+            $this->writeLog("{$this->phone} >> 登陆失败，请稍后再试");
+            throw new Exception('登陆失败，请稍后再试');
+        }
 
-        if ($res['code'] !== 200) return $res['msg'] ?? '登陆失败';
+        if ($res['code'] !== 200) {
+            $this->writeLog("{$this->phone} >>> 登陆失败 --- {$res['msg']}");
+            return $res['msg'] ?? '登陆失败';
+        }
 
-        if (empty($res['data']['token'])) throw new Exception('data.token 字段不存在，请重试！');;
+        if (empty($res['data']['token'])) {
+            $this->writeLog("{$this->phone} >>> data.token 字段不存在，请重试！");
+            throw new Exception('data.token 字段不存在，请重试！');
+        }
 
+        $this->writeLog("{$this->phone} >>> 登陆成功，获取 Token 成功");
         return $res['data']['token'];
     }
 
@@ -60,7 +88,7 @@ class Moguding
      * @return mixed|string
      * @throws Exception
      */
-    public function getPlanId()
+    public function getPlanId(): string
     {
         $url = 'https://api.moguding.net:9000/practice/plan/v1/getPlanByStu';
         $res = self::postRaw($url, [
@@ -69,25 +97,36 @@ class Moguding
             'roleKey: student'
         ], []);
 
-        if (empty($res)) throw new Exception('获取 PlanID 失败，请稍后再试');
+        if (empty($res)) {
+            $this->writeLog("{$this->phone} >>> 获取 PlanID 失败，请稍后再试");
+            throw new Exception('获取 PlanID 失败，请稍后再试');
+        }
 
-        if ($res['code'] !== 200) return $res['msg'] ?? '获取 PlanID 失败';
+        if ($res['code'] !== 200) {
+            $this->writeLog("{$this->phone} >>> 获取 PlanID 失败 --- {$res['msg']}");
+            return $res['msg'] ?? '获取 PlanID 失败';
+        }
 
-        if (empty($res['data'][0]['planId'])) throw new Exception('data[0].planId 字段不存在，请重试！');
+        if (empty($res['data'][0]['planId'])) {
+            $this->writeLog("{$this->phone} >>> data[0].planId 字段不存在，请重试！");
+            throw new Exception('data[0].planId 字段不存在，请重试！');
+        }
 
+        $this->writeLog("{$this->phone} >>> 获取 planId 成功！");
         return $res['data'][0]['planId'];
-
     }
 
     /**
      * 执行签到
-     * @param string $type START：上班签到   END：下班签到
+     * @param string $device
+     * @return string
+     * @throws Exception
      */
-    public function doSign(string $type = 'START', string $device = 'android')
+    public function doSign(string $device = 'android'): string
     {
         $this->location['device'] = strtolower($device);//设备
         $this->location['planId'] = $this->planId;
-        $this->location['type'] = strtoupper($type);//签到类型
+        $this->location['type'] = strtoupper($this->signType);//签到类型
         $this->location['state'] = 'NORMAL';//状态
         $this->location['attendanceType'] = '';//未知属性
 
@@ -98,9 +137,27 @@ class Moguding
             'roleKey: student'
         ], $this->location);
 
-        print_r($res);
+        if (empty($res['code'])) {
+            $this->writeLog("{$this->phone} >>> 签到失败，code 字段不存在，请重试！");
+            throw new Exception('code 字段不存在，请重试！');
+        }
+
+        if ($res['code'] == 200) {
+            $this->writeLog("{$this->phone} >>> 签到成功");
+            return '签到成功';
+        }
+
+        $this->writeLog("{$this->phone} >>> 请求签到 API 失败，请重试 --- {$res['msg']}");
+        return $res['msg'] ?? '请求签到 API 失败，请重试';//否则输出相关信息
     }
 
+    /**
+     * POST RAW 数据
+     * @param string $url 网址
+     * @param array $headers 头部
+     * @param array $jsonArr POST的数据，传入数组
+     * @return array 输出结果
+     */
     public static function postRaw(string $url, array $headers, array $jsonArr): array
     {
         $curl = curl_init();
@@ -127,5 +184,30 @@ class Moguding
         curl_close($curl);
 
         return json_decode($content, true) ?? [];
+    }
+
+    /**
+     * 智能获取签到类型，上班还是下班
+     * @param int $nowTime
+     * @return string
+     */
+    public function autoOutSignType(int $nowTime = -1): string
+    {
+        if ($nowTime < 0) $nowTime = time();
+        if ($nowTime <= strtotime(date('Y-m-d 09:50:00'))) return 'START';
+        if ($nowTime >= strtotime(date('Y-m-d 18:00:00'))) return 'END';
+        return 'STOP';
+    }
+
+    /**
+     * 编写日志文件
+     * @param string $content 日志内容
+     * @return bool
+     */
+    private function writeLog(string $content): bool
+    {
+        $fileName = date("Y-m-d.log");
+        $content = date('[Y-m-d H:i:s] ==> ') . $content . PHP_EOL;
+        return !!file_put_contents(dirname(__DIR__) . "/logs/{$fileName}", $content, FILE_APPEND);
     }
 }
