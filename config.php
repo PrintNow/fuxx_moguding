@@ -5,7 +5,9 @@ return [
         'phone' => '手机号',
         'password' => '密码',
 
+        //相关地址经纬度信息获取
         //https://api.map.baidu.com/lbsapi/getpoint/index.html
+        //请注意下格式
         'data' => [
             'country' => '中国',
             'province' => '广东省',
