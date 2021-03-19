@@ -8,7 +8,7 @@ class Moguding
     private $token = '';//登录后可以获取到的
     private $planId = '';//签到计划ID
 
-    private $signType = 'START';//签到类型，默认上班签到
+    private $signType = '';//签到类型，默认上班签到
 
     /**
      * @var array
@@ -31,7 +31,7 @@ class Moguding
      */
     public function setSignType(string $signType): Moguding
     {
-        $this->signType = $signType;
+        $this->signType = strtoupper($signType);
         return $this;
     }
 
@@ -43,7 +43,9 @@ class Moguding
     {
         $this->writeLog("开始运行");
         $this->token = $this->getToken();
+        usleep(rand(200, 800));
         $this->planId = $this->getPlanId();
+        usleep(rand(200, 800));
         $this->doSign();
     }
 
@@ -124,9 +126,10 @@ class Moguding
      */
     public function doSign(string $device = 'android'): string
     {
+        if ($this->autoOutSignType() === 'STOP') die('终止执行' . PHP_EOL);
         $this->location['device'] = strtolower($device);//设备
         $this->location['planId'] = $this->planId;
-        $this->location['type'] = strtoupper($this->signType);//签到类型
+        $this->location['type'] = empty($this->signType) ? $this->autoOutSignType() : $this->signType;//签到类型
         $this->location['state'] = 'NORMAL';//状态
         $this->location['attendanceType'] = '';//未知属性
 
@@ -206,7 +209,7 @@ class Moguding
      */
     private function writeLog(string $content): bool
     {
-        $fileName = date("Y-m-d.log");
+        $fileName = date("Y-m-d") . '.log';
         $content = date('[Y-m-d H:i:s] ==> ') . $content . PHP_EOL;
         return !!file_put_contents(dirname(__DIR__) . "/logs/{$fileName}", $content, FILE_APPEND);
     }
