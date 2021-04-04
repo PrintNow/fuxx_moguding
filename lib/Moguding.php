@@ -155,6 +155,46 @@ class Moguding
     }
 
     /**
+     * 写周报
+     * @param string $startTime 一周开始时间，比如 2021-01-01 00:00:00
+     * @param string $endTime 一周结束时间，比如 2021-01-01 23:59:59
+     * @param string $weeks 第几周，比如     第5周
+     * @param string $title 标题，比如       第5周周报
+     * @param string $content 内容
+     * @throws Exception
+     */
+    public function sendWeekNote(string $startTime, string $endTime, string $weeks, string $title, string $content)
+    {
+        $this->token = $this->getToken();
+        $this->planId = $this->getPlanId();
+
+        $url = 'https://118.190.120.71:9000/practice/paper/v1/save';
+
+        $postData = [
+            'reportType' => 'week',
+            'address' => '',
+            'weeks' => $weeks,
+            'latitude' => '0.0',
+            'planId' => $this->planId,
+            'startTime' => $startTime,
+            'yearmonth' => '',
+            'endTime' => $endTime,
+            'title' => $title,
+            'content' => $content,
+            'longitude' => '0.0'
+        ];
+
+        $res = self::postRaw($url, [
+            'Authorization: ' . $this->token,
+            'Content-Type: application/json; charset=UTF-8',
+            'roleKey: student',
+            'Host' => 'api.moguding.net:9000'
+        ], $postData);
+
+        print_r($res);
+    }
+
+    /**
      * POST RAW 数据
      * @param string $url 网址
      * @param array $headers 头部
